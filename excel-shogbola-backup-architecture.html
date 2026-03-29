@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automated Database Backup Architecture — Excel Shogbola</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0c0c0e;
+    --bg2: #141416;
+    --bg3: #1c1c20;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8e6df;
+    --muted: #888780;
+    --accent: #378add;
+    --accent2: #1d9e75;
+    --amber: #f2a623;
+    --red: #e24b4a;
+    --serif: 'DM Serif Display', Georgia, serif;
+    --sans: 'Inter', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.75;
+    min-height: 100vh;
+  }
+
+  .page { max-width: 860px; margin: 0 auto; padding: 64px 32px 120px; }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 56px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .author-block { display: flex; flex-direction: column; gap: 2px; }
+  .author-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .author-role { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+  .doc-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(55,138,221,0.1);
+    border: 1px solid rgba(55,138,221,0.2);
+    padding: 4px 10px;
+    border-radius: 4px;
+  }
+
+  /* Header */
+  .header { margin-bottom: 56px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(30px, 5vw, 50px);
+    font-weight: 400;
+    line-height: 1.1;
+    color: #f0ede6;
+    margin-bottom: 20px;
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 620px;
+    line-height: 1.75;
+    margin-bottom: 28px;
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .meta-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100%{opacity:1;transform:scale(1)}
+    50%{opacity:0.5;transform:scale(0.8)}
+  }
+
+  /* Sections */
+  .section { margin-bottom: 60px; }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: 24px;
+    font-weight: 400;
+    color: #f0ede6;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .section-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .section-divider {
+    height: 1px;
+    background: var(--border);
+    margin-bottom: 24px;
+    margin-top: 8px;
+  }
+
+  h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 32px 0 12px;
+  }
+
+  p { color: #c2bfb8; margin-bottom: 14px; max-width: 680px; line-height: 1.8; }
+  p:last-child { margin-bottom: 0; }
+
+  /* Problem/solution highlight */
+  .highlight-box {
+    border-left: 3px solid var(--accent);
+    background: rgba(55,138,221,0.05);
+    padding: 20px 24px;
+    border-radius: 0 8px 8px 0;
+    margin: 24px 0;
+  }
+
+  .highlight-box.danger {
+    border-left-color: var(--red);
+    background: rgba(226,75,74,0.05);
+  }
+
+  .highlight-box.success {
+    border-left-color: var(--accent2);
+    background: rgba(29,158,117,0.05);
+  }
+
+  .highlight-box p { margin: 0; font-size: 14px; }
+  .highlight-box strong { color: var(--text); }
+
+  /* Architecture flow */
+  .arch-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin: 24px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arch-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.3;
+  }
+
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .pipe-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 110px;
+  }
+
+  .pipe-icon-wrap {
+    width: 48px; height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: 1px solid var(--border2);
+    margin-bottom: 10px;
+  }
+
+  .pipe-icon-wrap.blue { background: rgba(55,138,221,0.12); border-color: rgba(55,138,221,0.2); }
+  .pipe-icon-wrap.teal { background: rgba(29,158,117,0.12); border-color: rgba(29,158,117,0.2); }
+  .pipe-icon-wrap.amber { background: rgba(242,166,35,0.12); border-color: rgba(242,166,35,0.2); }
+  .pipe-icon-wrap.gray { background: var(--bg3); }
+
+  .pipe-title { font-size: 12px; font-weight: 500; color: var(--text); text-align: center; margin-bottom: 2px; }
+  .pipe-sub { font-size: 11px; color: var(--muted); text-align: center; font-family: var(--mono); }
+
+  .pipe-arrow {
+    display: flex;
+    align-items: flex-start;
+    padding-top: 12px;
+    color: var(--border2);
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  /* Steps list */
+  .step-list { display: flex; flex-direction: column; gap: 4px; margin: 20px 0; }
+
+  .step-item {
+    display: flex;
+    gap: 18px;
+    padding: 18px 20px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .step-item:hover { background: var(--bg2); border-color: var(--border); }
+
+  .step-n {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+
+  .step-content h4 { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .step-content p { font-size: 13px; color: var(--muted); margin: 0; max-width: 100%; }
+
+  /* Dual storage */
+  .storage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+
+  @media(max-width:560px){
+    .storage-grid { grid-template-columns: 1fr; }
+    .pipe-arrow { display: none; }
+  }
+
+  .store-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+  }
+
+  .store-card.primary { border-color: rgba(55,138,221,0.2); background: rgba(55,138,221,0.04); }
+  .store-card.secondary { border-color: rgba(29,158,117,0.2); background: rgba(29,158,117,0.04); }
+
+  .store-icon { font-size: 26px; margin-bottom: 12px; }
+  .store-card h4 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .store-card p { font-size: 13px; color: var(--muted); margin: 0; max-width: 100%; }
+
+  .store-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-top: 10px;
+  }
+
+  .badge-blue { color: #378add; background: rgba(55,138,221,0.1); border: 1px solid rgba(55,138,221,0.2); }
+  .badge-teal { color: #1d9e75; background: rgba(29,158,117,0.1); border: 1px solid rgba(29,158,117,0.2); }
+
+  /* Code */
+  .code-wrap {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+    overflow: hidden;
+  }
+
+  .code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .code-filename { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .code-lang {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(55,138,221,0.1);
+    padding: 2px 8px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .code-body {
+    padding: 18px 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: #9de0c4;
+    line-height: 1.9;
+    overflow-x: auto;
+  }
+
+  .c { color: #4a4a5a; }
+  .kw { color: #7f77dd; }
+  .str { color: #f2a623; }
+  .cmd { color: #378add; }
+
+  /* Security checklist */
+  .sec-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+
+  .sec-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    color: #c2bfb8;
+  }
+
+  .sec-check {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    background: rgba(29,158,117,0.15);
+    border: 1px solid rgba(29,158,117,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .sec-check svg { width: 10px; height: 10px; }
+  .sec-item strong { color: var(--text); font-weight: 500; }
+
+  /* Recovery timeline */
+  .recovery { position: relative; padding-left: 20px; margin: 20px 0; }
+  .recovery::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:1px; background: var(--border2); }
+
+  .r-step { position: relative; padding: 0 0 24px 24px; }
+  .r-step::before {
+    content:'';
+    position: absolute;
+    left: -4px; top: 6px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent2);
+    border: 2px solid var(--bg);
+  }
+
+  .r-step h4 { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+  .r-step p { font-size: 13px; color: var(--muted); margin: 0; max-width: 100%; }
+
+  /* Alert */
+  .alert {
+    display: flex;
+    gap: 14px;
+    padding: 18px 20px;
+    border-radius: 8px;
+    border: 1px solid;
+    margin: 20px 0;
+  }
+
+  .alert.warn { background: rgba(242,166,35,0.05); border-color: rgba(242,166,35,0.2); }
+  .alert.info { background: rgba(55,138,221,0.05); border-color: rgba(55,138,221,0.2); }
+  .alert-ico { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+  .alert p { font-size: 13px; margin: 0; max-width: 100%; }
+  .alert strong { color: var(--text); }
+
+  .divider { height: 1px; background: var(--border); margin: 48px 0; }
+
+  /* Footer */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+    margin-top: 64px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .footer-name { font-family: var(--serif); font-size: 18px; color: #f0ede6; }
+  .footer-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); text-align: right; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="author-block">
+      <span class="author-name">Excel Shogbola</span>
+      <span class="author-role">Technical Document · Database Reliability</span>
+    </div>
+    <span class="doc-tag">Proposed Architecture</span>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="eyebrow">Infrastructure Proposal</div>
+    <h1>Zero-Cost Automated<br>Database Backup System</h1>
+    <p class="subtitle">A production-grade disaster recovery pipeline that automatically backs up any organisation's database to two independent off-site locations every month — at zero infrastructure cost.</p>
+    <div class="meta-row">
+      <span class="meta-pill"><span class="status-dot"></span>Tested &amp; Operational</span>
+      <span class="meta-pill">PostgreSQL compatible</span>
+      <span class="meta-pill">100% free to run</span>
+      <span class="meta-pill">No servers to maintain</span>
+    </div>
+  </header>
+
+  <!-- Problem -->
+  <section class="section">
+    <h2><span class="section-num">01</span> The Problem</h2>
+    <div class="section-divider"></div>
+
+    <p>Most organisations treat database backups as an afterthought — relying on manual exports, shared drives with no versioning, or assuming the hosting provider handles everything. When something goes wrong, they discover too late that no reliable, restorable backup exists.</p>
+
+    <div class="highlight-box danger">
+      <p><strong>Common failure scenarios:</strong> A developer runs a bad migration and corrupts the schema. An admin accidentally deletes the wrong table. A ransomware attack encrypts the primary database. The hosting provider experiences an unrecoverable storage failure. In all four cases, if no automated off-site backup exists, the data is gone permanently.</p>
+    </div>
+
+    <p>The solution is not expensive — it is architectural. With the right tooling, a fully automated, cryptographically secured backup pipeline can be built and operated at zero cost, running silently every month without any human intervention.</p>
+  </section>
+
+  <!-- Architecture -->
+  <section class="section">
+    <h2><span class="section-num">02</span> Proposed Architecture</h2>
+    <div class="section-divider"></div>
+
+    <p>The pipeline is codified entirely in a single YAML workflow file and runs on GitHub Actions — a free, enterprise-grade CI/CD platform used by thousands of organisations globally. No dedicated backup server is required. No paid services are needed.</p>
+
+    <div class="arch-card">
+      <div class="pipeline">
+        <div class="pipe-step">
+          <div class="pipe-icon-wrap gray">🗓️</div>
+          <div class="pipe-title">Cron Scheduler</div>
+          <div class="pipe-sub">GitHub Actions</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-icon-wrap blue">🐘</div>
+          <div class="pipe-title">pg_dump</div>
+          <div class="pipe-sub">Full DB export</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-icon-wrap amber">🗜️</div>
+          <div class="pipe-title">gzip compress</div>
+          <div class="pipe-sub">.sql → .sql.gz</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-icon-wrap teal">📤</div>
+          <div class="pipe-title">Dual upload</div>
+          <div class="pipe-sub">2 destinations</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Execution sequence</h3>
+    <div class="step-list">
+      <div class="step-item">
+        <div class="step-n">1</div>
+        <div class="step-content">
+          <h4>Scheduler triggers at midnight on the 1st of every month</h4>
+          <p>GitHub's cron system fires the workflow automatically. It can also be triggered manually by any repository admin at any time — useful for pre-migration backups or on-demand snapshots.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-n">2</div>
+        <div class="step-content">
+          <h4>Temporary Ubuntu runner is provisioned</h4>
+          <p>GitHub spins up a clean, isolated Linux container for the job. It is destroyed immediately after the run completes. No persistent infrastructure to patch, monitor, or pay for.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-n">3</div>
+        <div class="step-content">
+          <h4>pg_dump connects to the production database and exports everything</h4>
+          <p>PostgreSQL's official native dump utility exports the complete database — all tables, all schemas, all data, all relationships — as a self-contained SQL file that can fully reconstruct the database on any PostgreSQL instance from scratch.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-n">4</div>
+        <div class="step-content">
+          <h4>Output is compressed immediately in the same pipe</h4>
+          <p>The SQL stream is piped directly through gzip before touching disk. A typical production database compresses to a fraction of its raw size, making storage and transfer trivially fast and cheap.</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-n">5</div>
+        <div class="step-content">
+          <h4>Backup is uploaded to two independent destinations simultaneously</h4>
+          <p>Redundant off-site storage eliminates the single point of failure. If either destination experiences downtime on backup day, the other still captures the data. Both uploads happen within the same workflow run.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Storage -->
+  <section class="section">
+    <h2><span class="section-num">03</span> Storage Destinations</h2>
+    <div class="section-divider"></div>
+    <p>Two independent, geographically separate platforms receive every backup. Neither is under the control of the organisation's primary infrastructure, meaning a compromise of the production environment does not affect the backups.</p>
+
+    <div class="storage-grid">
+      <div class="store-card primary">
+        <div class="store-icon">🐙</div>
+        <h4>GitHub Releases</h4>
+        <p>Version-controlled, tagged by date, downloadable by authorised collaborators. Full audit trail. Access is governed by GitHub repository permissions.</p>
+        <span class="store-badge badge-blue">Primary — version controlled</span>
+      </div>
+      <div class="store-card secondary">
+        <div class="store-icon">✈️</div>
+        <h4>Telegram Private Channel</h4>
+        <p>Unlimited cloud storage on Telegram's infrastructure. Instant push notification confirms backup delivery. Accessible on any device, globally.</p>
+        <span class="store-badge badge-teal">Secondary — instant notification</span>
+      </div>
+    </div>
+
+    <div class="alert info">
+      <span class="alert-ico">ℹ️</span>
+      <p><strong>Why two destinations?</strong> Regulatory best practice and the 3-2-1 backup rule both recommend at least two copies stored in at least two different locations. A single backup that lives on the same platform as the production data offers very limited protection.</p>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- Security -->
+  <section class="section">
+    <h2><span class="section-num">04</span> Security Design</h2>
+    <div class="section-divider"></div>
+
+    <p>No credentials are stored in any codebase or configuration file. All sensitive values are stored as encrypted GitHub Secrets — encrypted at rest using AES-256 — and injected into the workflow's runtime environment only at the moment of execution. GitHub automatically masks these values in all log output, making them impossible to leak through CI logs.</p>
+
+    <ul class="sec-list">
+      <li class="sec-item">
+        <span class="sec-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#1d9e75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><strong>Database credentials</strong> — Connection string stored as an encrypted secret. Never appears in source code or workflow logs. Rotatable without changing any code.</span>
+      </li>
+      <li class="sec-item">
+        <span class="sec-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#1d9e75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><strong>Backup files encrypted in transit</strong> — All transfers use TLS. GitHub's API and Telegram's Bot API both enforce HTTPS. The backup is never sent over plain HTTP at any point in the pipeline.</span>
+      </li>
+      <li class="sec-item">
+        <span class="sec-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#1d9e75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><strong>Access strictly limited</strong> — The Telegram channel is private. GitHub Releases are scoped to repository collaborators only. Neither destination is publicly discoverable or indexed.</span>
+      </li>
+      <li class="sec-item">
+        <span class="sec-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#1d9e75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><strong>Full audit trail</strong> — Every workflow run is logged with timestamps, exit codes, and output. Any failure automatically triggers an email notification to repository owners. Nothing runs silently without a record.</span>
+      </li>
+      <li class="sec-item">
+        <span class="sec-check"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#1d9e75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span><strong>Isolated execution environment</strong> — Each run uses a fresh, ephemeral container that is destroyed immediately after. No persistent attack surface. No residual data from previous runs.</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Recovery -->
+  <section class="section">
+    <h2><span class="section-num">05</span> Disaster Recovery Procedure</h2>
+    <div class="section-divider"></div>
+
+    <p>In the event of data loss, a full database restoration can be completed by any authorised team member in under 5 minutes using only a terminal and the backup file. No special tools, no vendor support calls, no waiting.</p>
+
+    <div class="alert warn">
+      <span class="alert-ico">⚠️</span>
+      <p><strong>Before restoring:</strong> If the database still partially exists and contains any recoverable data, export it first. The restore process overwrites the current database state entirely.</p>
+    </div>
+
+    <div class="recovery">
+      <div class="r-step">
+        <h4>Download the backup file</h4>
+        <p>From GitHub: repository → Releases tab → download the most recent <code>.sql.gz</code> file. From Telegram: open the backup channel → download the most recent file attachment. Both contain identical data.</p>
+      </div>
+      <div class="r-step">
+        <h4>Decompress the archive</h4>
+        <div class="code-wrap" style="margin:10px 0">
+          <div class="code-header">
+            <span class="code-filename">terminal</span>
+            <span class="code-lang">bash</span>
+          </div>
+          <div class="code-body">
+            <span class="c"># Extract the .sql file from the compressed archive</span><br>
+            <span class="cmd">gunzip</span> database_backup_2026_04_01.sql.gz
+          </div>
+        </div>
+      </div>
+      <div class="r-step">
+        <h4>Restore to the database</h4>
+        <div class="code-wrap" style="margin:10px 0">
+          <div class="code-header">
+            <span class="code-filename">terminal</span>
+            <span class="code-lang">bash</span>
+          </div>
+          <div class="code-body">
+            <span class="c"># Replay all SQL statements — fully reconstructs the database</span><br>
+            <span class="cmd">psql</span> <span class="str">"postgresql://[USER]:[PASSWORD]@[HOST]:5432/[DATABASE]"</span> <span class="kw">&lt;</span> database_backup_2026_04_01.sql
+          </div>
+        </div>
+      </div>
+      <div class="r-step">
+        <h4>Verify the restoration</h4>
+        <p>Connect to the database and confirm that all tables, records, and relationships are intact. The application should resume normal operation immediately — no further configuration required.</p>
+      </div>
+    </div>
+
+    <div class="alert info">
+      <span class="alert-ico">✅</span>
+      <p><strong>What is restored:</strong> The complete database — every table, every row, all schema definitions, all indexes, all relationships, all stored procedures — exactly as it existed at the moment the backup was taken. Full fidelity. Nothing is missing.</p>
+    </div>
+  </section>
+
+  <!-- Cost -->
+  <section class="section">
+    <h2><span class="section-num">06</span> Cost &amp; Maintenance</h2>
+    <div class="section-divider"></div>
+
+    <p>This architecture operates at zero recurring cost on the free tiers of both platforms. GitHub Actions provides 2,000 free minutes per month — a monthly database backup consumes approximately 2 minutes. Telegram provides unlimited file storage at no cost.</p>
+
+    <div class="highlight-box success">
+      <p><strong>Total monthly cost: ₦0.</strong> No cloud storage fees. No dedicated server. No third-party backup SaaS subscription. The only requirement is a GitHub account and a Telegram account — both free. This architecture scales from a small team database to a large enterprise database with zero change in cost or complexity.</p>
+    </div>
+
+    <p>Maintenance overhead is effectively zero. The workflow is self-contained in a single versioned file. Updates to the database host or credentials require only updating the corresponding GitHub Secret — no code changes, no redeployment.</p>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-name">Excel Shogbola</div>
+    <div class="footer-meta">
+      Automated Database Backup Architecture<br>
+      Prepared March 2026
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
